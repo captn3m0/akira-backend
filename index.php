@@ -73,18 +73,25 @@ dispatch('/journey/end',function(){
 	$result = $db->query("SELECT id FROM journeys WHERE end =0 AND user_id = $userid LIMIT 0,1");
 	//get the unended journey
 	list($journey_id) = $result->fetch_row();//get its id
-	list($lat,$lng) = array($_REQUEST['lat'],$_REQUEST['lng']);//get the lat lng for this request
+	list($lat,$lng) = @array($_REQUEST['lat'],$_REQUEST['lng']);//get the lat lng for this request
+	if(!$lat)
+		halt();
 	$db->query("INSERT INTO journey_points VALUES ($journey_id,$lat,$lng)");//save a new point
 	$end_point = $db->insert_id;
 	$db->query("UPDATE journeys SET end=$end_point WHERE id = $journey_id");
+
+
 	return 'ENDED';
 });
 dispatch('/journey/start',function(){
 	$userid = set('id');
 	$db = option('db');
 	$db->query("INSERT INTO journeys (user_id) VALUES ('$userid')");
+	echo $db->error;
 	$journey_id = $db->insert_id;
-	list($lat,$lng) = array($_REQUEST['lat'],$_REQUEST['lng']);
+	list($lat,$lng) = @array($_REQUEST['lat'],$_REQUEST['lng']);
+	if(!$lat)
+		halt();
 	$db->query("INSERT INTO journey_points VALUES ($journey_id,$lat,$lng)");
 	$start_point_id = $db->insert_id;
 	$db->query("UPDATE journeys SET start = $start_point_id WHERE id = $journey_id");
@@ -93,11 +100,19 @@ dispatch('/journey/start',function(){
 dispatch('/journey/ping',function(){
 	$userid = set('id');
 	$db = option('db');
-	$result = $db->query("SELECT id FROM journeys WHERE end =0 AND user_id = $userid LIMIT 0,1");
+	$result = $db->query("SELECT MAX(id) FROM journeys WHERE end=0 AND user_id = $userid LIMIT 0,1");
 	list($journey_id) = $result->fetch_row();
 	list($lat,$lng) = array($_REQUEST['lat'],$_REQUEST['lng']);
-	$db->query("INSERT INTO journey_points VALUES ($journey_id,$lat,$lng)");
-	return 'NOTED';
+	$db->query("INSERT INTO journey_points (journey_id,lat,lng) VALUES ($journey_id,$lat,$lng)");
+	$end_point = $db->insert_id;
+	$end_point--;
+	//Now we also need to update the total distance travelled by the user as well
+	$results = $db->query("SELECT lat,lng FROM journey_points WHERE id <= '$end_point' AND journey_id = $journey_id ORDER BY id DESC LIMIT 0,2");
+	list($lat1,$lng1) = $results->fetch_row();
+	list($lat2,$lng2) = $results->fetch_row();
+	$distance = abs(distance($lat1,$lng1,$lat2,$lng2));
+	$db->query("UPDATE users set distance = distance+$distance");
+	return $distance;
 });
 //start the app
 run();
