@@ -32,6 +32,9 @@ function before($route)
 		if(strpos($route['pattern'],'journey')!==false)
 			halt(NOT_FOUND);
 	}
+	//header("Access-Control-Allow-Origin: ".$_SERVER['HTTP_ORIGIN']);
+	header("Allow-Control-Allow-Methods: OPTIONS, GET, POST, PUT, DELETE");
+	header("Access-Control-Allow-Headers: Content-Type, X-Requested-With");
 }
 /**
  * The various routes for the application
@@ -42,7 +45,7 @@ dispatch('/',function(){
 	return 'Hello from akira';
 });
 
-dispatch('/login',function(){
+dispatch_post('/login',function(){
 	//This is where we recieve the login requests
 	if(isset($_REQUEST['email'])){
 		$email = $_REQUEST['email'];
@@ -56,6 +59,24 @@ dispatch('/login',function(){
 	}
 
 });
+
+dispatch('/journey/list/:user',function(){
+	$userid = set('id');
+	if(params('user')) $userid = params('user');
+	$db = option('db');
+	$result = $db->query("SELECT * FROM journeys WHERE user_id = '$userid'");
+	$arr = array();
+	while($row = $result->fetch_assoc()){
+		$mr = $db->query("SELECT * FROM journey_points WHERE journey_id = {$row['id']} ORDER BY id ASC");
+		$mra = array();
+		while($jp = $mr->fetch_assoc()){
+			array_push($mra,$jp);
+		}
+		array_push($arr,$mra);
+	}
+	return json($arr);
+});
+
 dispatch('/journey/info/:id',function(){
 	$userid = set('id');
 	$db = option('db');
@@ -113,6 +134,17 @@ dispatch('/journey/ping',function(){
 	$distance = abs(distance($lat1,$lng1,$lat2,$lng2));
 	$db->query("UPDATE users set distance = distance+$distance");
 	return $distance;
+});
+
+dispatch('/users',function(){
+	$db = option('db');
+	$results= $db->query("SELECT * FROM users order by distance DESC");
+	$arr = array();
+	while($row = $results->fetch_assoc()){
+		$row['pic']='http://192.168.208.247/pics/'.$row['id'].'.jpg';
+		array_push($arr,$row);
+	}
+	return json($arr);
 });
 //start the app
 run();
